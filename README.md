@@ -1,0 +1,7 @@
+ngrok http 5000
+app.py
+.env-->CHANNEL_ACCESS_TOKEN/CHANNEL_SECRET/OPENAI_API_KEY/
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=dv107
+DB_NAME=lume_db
