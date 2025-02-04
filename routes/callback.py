@@ -6,6 +6,7 @@ from core.database import create_user_db, save_message, get_user_profile, set_us
 from core.consent import check_consent_and_respond
 from core.gpt import chat_with_gpt
 import re
+from core.database import save_message_with_emotion  # 引入新的存儲函數
 
 router = APIRouter()
 
@@ -115,14 +116,14 @@ def handle_message(event):
             reply_message(event.reply_token, "感謝你告訴我這些資訊！現在我們可以開始聊天了 😊")
             return
 
-    # 儲存訊息
-    save_message(user_id, "user", user_message)
+    # 儲存用戶消息並記錄情緒
+    save_message_with_emotion(user_id, "user", user_message)
 
-    # 呼叫 GPT-4，並傳遞用戶資料和對話記錄
+    # GPT-4 回應
     gpt_response = chat_with_gpt(user_id, user_message)
 
     # 儲存 GPT 回應
-    save_message(user_id, "bot", gpt_response)
+    save_message_with_emotion(user_id, "bot", gpt_response)
 
     # 回應用戶
     reply_message(event.reply_token, gpt_response)

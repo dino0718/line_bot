@@ -5,6 +5,11 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from core.config import Config
+from transformers import pipeline
+
+# 初始化情緒分析模型
+sentiment_analyzer = pipeline("sentiment-analysis")
+
 # 初始化 GPT-4
 llm = ChatOpenAI(
     model_name="gpt-4",
@@ -70,3 +75,21 @@ def chat_with_gpt(user_id, user_input):
     response = conversation.invoke({"user_input": combined_input})
 
     return response["text"].strip()
+
+def analyze_emotion(message):
+    """
+    分析消息的情緒
+    """
+    try:
+        result = sentiment_analyzer(message)[0]
+        label = result['label']  # 標籤：POSITIVE、NEGATIVE、NEUTRAL
+        score = result['score']  # 置信分數
+        if label == "POSITIVE":
+            return "正面"
+        elif label == "NEGATIVE":
+            return "負面"
+        else:
+            return "中性"
+    except Exception as e:
+        print(f"情緒分析錯誤：{e}")
+        return "未知"

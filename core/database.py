@@ -1,6 +1,7 @@
 import mysql.connector
 from core.config import Config
 from datetime import datetime
+from core.emotion import analyze_emotion  # 更新導入
 
 def get_db_connection():
     """ 取得 MySQL 連線 """
@@ -212,3 +213,30 @@ def get_user_profile(user_id):
         }
     return None
 
+def save_message_with_emotion(user_id, sender, message):
+    """
+    儲存聊天記錄到 `messages_<user_id>` 表，並記錄情緒
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 表名轉換
+    table_name = f"messages_{user_id.replace('-', '_')}"
+
+    # 分析情緒
+    emotion = analyze_emotion(message) if sender == "user" else None
+
+    try:
+        # 插入對話
+        insert_query = f"INSERT INTO {table_name} (sender, message, emotion) VALUES (%s, %s, %s)"
+        cursor.execute(insert_query, (sender, message, emotion))
+        conn.commit()
+
+        # Debug 訊息
+        print(f"✅ 成功插入訊息到 {table_name}：{sender} - {message} - {emotion}")
+
+    except mysql.connector.Error as e:
+        print(f"❌ MySQL 插入錯誤：{e}")
+
+    finally:
+        conn.close()
