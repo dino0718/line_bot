@@ -76,6 +76,12 @@ def handle_message(event):
     # 確保用戶資料表已存在
     create_user_db(user_id)
 
+    # 檢查是否已同意隱私政策
+    consent_reply = check_consent_and_respond(user_id, user_message)
+    if consent_reply:
+        reply_message(event.reply_token, consent_reply)
+        return
+
     # 檢查用戶基本資料
     user_profile = get_user_profile(user_id)
 
