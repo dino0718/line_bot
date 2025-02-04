@@ -46,13 +46,15 @@ def create_user_db(user_id):
         # 為該用戶建立專屬的聊天歷史表
         table_name = f"messages_{user_id.replace('-', '_')}"  # MySQL 表名不能有 "-"
         create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            sender VARCHAR(10),  /* 'user' or 'bot' */
-            message TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                sender VARCHAR(10),  /* 'user' or 'bot' */
+                message TEXT,
+                emotion VARCHAR(50) DEFAULT NULL,  /* 新增情緒欄位 */
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+
         cursor.execute(create_table_query)
         conn.commit()
 
