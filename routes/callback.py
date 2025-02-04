@@ -2,11 +2,15 @@ from fastapi import APIRouter, Request, HTTPException
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, FollowEvent
 from services.line import handler, reply_message, send_message
-from core.database import create_user_db
+from core.database import create_user_db, save_message, get_user_profile, set_user_profile
 from core.consent import check_consent_and_respond
 from core.gpt import chat_with_gpt
+import re
 
 router = APIRouter()
+
+# 記錄用戶資料填寫進度
+user_profile_step = {}
 
 @router.post("/callback")
 async def callback(request: Request):
@@ -26,11 +30,11 @@ async def callback(request: Request):
 @handler.add(FollowEvent)
 def handle_follow(event):
     """
-    當用戶加入好友時，建立專屬資料表
+    當用戶加入好友時，建立專屬資料表，並發送隱私政策
     """
     user_id = event.source.user_id
 
-    # 為該用戶建立專屬的 MySQL 資料表
+    # 建立用戶專屬資料表
     create_user_db(user_id)
 
     # 發送歡迎訊息
@@ -43,43 +47,82 @@ def handle_follow(event):
         " - 讓您透過簡單的心理測驗，更了解自己的情緒狀態。\n"
         " - 提供實用的心理健康知識與貼心建議，陪伴您度過每一天。\n\n"
         
-        "🔒  我們如何保護您的資料安全？ \n"
-        " -  加密存儲 ：我們的系統會對您的資料進行加密處理，防止未授權的存取。\n"
-        " -  最小化存取 ：我們僅收集提供服務所需的最少資訊。\n"
-        " -  匿名分析 ：我們只會以匿名形式統計數據，用於優化服務，絕不洩露您的個人隱私。\n"
-        " -  定期檢查 ：我們的系統會進行定期的安全性檢查，確保您的資料受到最嚴格的保護。\n\n"
-        
         "📢  隱私政策  📢\n\n"
         "1️⃣  我們收集哪些資料？ \n"
         " - Line User ID：用於辨識使用者並提供個人化服務。\n"
         " - 對話內容：您傳送的文字、貼圖、語音可能被記錄以分析需求並回應。\n"
         " - 心理測驗結果：若使用心理測驗功能，系統可能記錄結果以便於優化服務。\n\n"
         
-        "2️⃣  我們如何使用這些資料？ \n"
-        " - 回覆您的聊天訊息，提供心理支持。\n"
-        " - 優化服務，讓功能更加貼合您的需求（統計分析匿名數據）。\n"
-        " - 安全防護：若偵測到高風險訊號，會提供緊急求助資訊。\n\n"
-        
         "✅  請輸入「同意」以繼續使用 Lume 的服務。 \n"
-        "✅  如若已經同意過，請忽略本訊息，即可開始使用。 \n"
         "❓ 若有任何疑問，隨時聯繫我們，我們很樂意協助您！\n"
     )
     send_message(user_id, welcome_text)
 
+from core.database import create_user_db, save_message, get_user_profile, set_user_profile
+import re
+
+# 用戶資料收集步驟
+user_profile_step = {}
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     """
-    處理用戶的文字訊息
+    處理用戶的文字訊息，並檢查基本資料是否完整
     """
     user_id = event.source.user_id
     user_message = event.message.text.strip()
 
-    # 檢查是否已同意條款
-    consent_reply = check_consent_and_respond(user_id, user_message)
-    if consent_reply:
-        reply_message(event.reply_token, consent_reply)
-        return
+    # 確保用戶資料表已存在
+    create_user_db(user_id)
 
-    # GPT-4 回應
-    gpt_response = chat_with_gpt(user_message)
+    # 檢查用戶基本資料
+    user_profile = get_user_profile(user_id)
+
+    if not user_profile or not user_profile.get("name") or not user_profile.get("birth_date") or not user_profile.get("interests") or not user_profile.get("mood"):
+        if user_id not in user_profile_step:
+            user_profile_step[user_id] = 1
+            reply_message(event.reply_token, "歡迎回來！為了讓我更認識你，請告訴我你的名字 😊")
+            return
+
+        # 填寫名字
+        if user_profile_step[user_id] == 1:
+            set_user_profile(user_id, name=user_message)
+            user_profile_step[user_id] = 2
+            reply_message(event.reply_token, "請輸入你的出生年月日（格式：YYYY-MM-DD）")
+            return
+
+        # 填寫出生年月日
+        if user_profile_step[user_id] == 2:
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', user_message):
+                set_user_profile(user_id, birth_date=user_message)
+                user_profile_step[user_id] = 3
+                reply_message(event.reply_token, "你有什麼興趣或喜歡的活動嗎？")
+            else:
+                reply_message(event.reply_token, "請輸入正確的出生年月日格式，例如：1999-05-20 🙏")
+            return
+
+        # 填寫興趣
+        if user_profile_step[user_id] == 3:
+            set_user_profile(user_id, interests=user_message)
+            user_profile_step[user_id] = 4
+            reply_message(event.reply_token, "最後，你現在的心情如何？😊")
+            return
+
+        # 填寫心情
+        if user_profile_step[user_id] == 4:
+            set_user_profile(user_id, mood=user_message)
+            del user_profile_step[user_id]
+            reply_message(event.reply_token, "感謝你告訴我這些資訊！現在我們可以開始聊天了 😊")
+            return
+
+    # 儲存訊息
+    save_message(user_id, "user", user_message)
+
+    # 呼叫 GPT-4，並傳遞用戶資料和對話記錄
+    gpt_response = chat_with_gpt(user_id, user_message)
+
+    # 儲存 GPT 回應
+    save_message(user_id, "bot", gpt_response)
+
+    # 回應用戶
     reply_message(event.reply_token, gpt_response)
