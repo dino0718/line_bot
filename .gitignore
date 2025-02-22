@@ -2,3 +2,5 @@
 /__pycache__
 /test.py
 /venv
+/service-account.json
+__pycache__/*
